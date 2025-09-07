@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Filtro de Candidatos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Chat con Marina</h1>
+  <div id="chat"></div>
+
+  <input id="userInput" type="text" placeholder="Escribe tu respuesta...">
+  <button onclick="sendMessage()">Enviar</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+async function sendMessage() {
+  const input = document.getElementById("userInput");
+  const chat = document.getElementById("chat");
+
+  const userText = input.value;
+  if (!userText) return;
+
+  // Mostrar en pantalla
+  chat.innerHTML += `<p><strong>Tú:</strong> ${userText}</p>`;
+  input.value = "";
+
+  // Enviar al backend
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: userText }),
+  });
+
+  const data = await res.json();
+  chat.innerHTML += `<p><strong>Marina:</strong> ${data.reply}</p>`;
+  chat.scrollTop = chat.scrollHeight;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background: #f5f5f5;
+}
+
+#chat {
+  border: 1px solid #ccc;
+  background: #fff;
+  padding: 10px;
+  height: 300px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
