@@ -39,11 +39,15 @@
       chat.innerHTML += `<div class="msg user">👤 ${mensaje}</div>`;
 
       try {
-        const response = await fetch("https://filtro-candidatos.onrender.com/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensaje })
-        });
+    const response = await fetch("https://filtro-candidatos.onrender.com/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ 
+    mensaje, 
+    sessionId: "usuario1" // ⚡ luego podemos hacerlo dinámico
+  })
+});
+
         const data = await response.json();
 
         chat.innerHTML += `<div class="msg bot">🤖 ${data.respuesta}</div>`;
