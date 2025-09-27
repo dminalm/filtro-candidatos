@@ -1,16 +1,15 @@
 const express = require("express");
 const cors = require("cors");
-const { Configuration, OpenAIApi } = require("openai");
+const OpenAI = require("openai");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configuración OpenAI (Render → Environment Variables)
-const configuration = new Configuration({
+// Configuración OpenAI
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 // Ruta raíz para comprobar que funciona
 app.get("/", (req, res) => {
@@ -19,13 +18,13 @@ app.get("/", (req, res) => {
 
 // Ruta del chat
 app.post("/chat", async (req, res) => {
-  const { mensaje, sessionId } = req.body;
+  const { mensaje } = req.body;
   if (!mensaje) {
     return res.status(400).json({ error: "Mensaje vacío" });
   }
 
   try {
-    const completion = await openai.createChatCompletion({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini", // o gpt-4o si tienes acceso
       messages: [
         {
@@ -41,10 +40,10 @@ Sé clara, cercana y pide siempre sinceridad.`
       temperature: 0.7
     });
 
-    const respuesta = completion.data.choices[0].message.content;
+    const respuesta = completion.choices[0].message.content;
     res.json({ respuesta });
   } catch (error) {
-    console.error("Error OpenAI:", error.response?.data || error.message);
+    console.error("Error OpenAI:", error.message);
     res.status(500).json({ error: "Error al conectar con Marina" });
   }
 });
