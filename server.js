@@ -9,153 +9,135 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// === CONFIGURACIÓN OPENAI ===
+// --- CONFIG OPENAI ---
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// === CONFIGURACIÓN GOOGLE SHEETS ===
-async function guardarEnSheets(datos) {
-  try {
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+// --- CONFIG GOOGLE SHEETS ---
+const SHEET_ID = "1v-1ItJPfLQeZY0d-ayYSv43fkPxWDkyJ1MplenNstc4";
 
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
-
-    const now = new Date().toLocaleString("es-ES");
-    const fila = [
-      now,
-      datos.edad || "",
-      datos.nacionalidad || "",
-      datos.ocupacionIngresos || "",
-      datos.sanitario || "",
-      datos.soloPareja || "",
-      datos.menores || "",
-      datos.fuma || "",
-      datos.mascotas || "",
-      datos.tiempo || "",
-      datos.comentarios || "",
-      datos.telefono || "",
-      datos.email || "",
-    ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.SHEET_ID,
-      range: "Candidatos APTOS",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [fila] },
-    });
-
-    console.log("✅ Guardado en Google Sheets:", fila);
-  } catch (err) {
-    console.error("❌ Error al guardar en Google Sheets:", err.message);
-  }
-}
-
-// === RUTA DE PRUEBA GOOGLE SHEETS ===
-app.get("/test-sheets", async (req, res) => {
-  try {
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-    const sheets = google.sheets({ version: "v4", auth });
-
-    const meta = await sheets.spreadsheets.get({
-      spreadsheetId: process.env.SHEET_ID,
-    });
-
-    const sheetName = meta.data.sheets[0].properties.title;
-
-    res.json({
-      message: "✅ Conexión correcta a Google Sheets",
-      sheetName,
-    });
-  } catch (err) {
-    res.status(500).send("❌ Error test Sheets: " + err.message);
-  }
+const auth = new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
+const sheets = google.sheets({ version: "v4", auth });
 
-// === RUTA DEL CHAT ===
-app.post("/chat", async (req, res) => {
-  const { mensaje, historial = [] } = req.body;
-
-  try {
-    const promptBase = `
+// --- PROMPT BASE ---
+const promptBase = `
 Eres Marina 👩, una asistente que entrevista candidatos para alquilar habitaciones.
-Debes sonar simpática, cercana pero profesional. 
+Habla de forma cercana pero profesional. 
 
-Tu tarea es hacer una entrevista en 10 pasos:
-1. ¿Cuántos años tienes?
-2. ¿Cuál es tu nacionalidad?
-3. ¿Estudias o trabajas? ¿Cuáles son tus ingresos?
-4. ¿Eres sanitario o trabajas en el ámbito de la salud?
-5. ¿Alquilas solo o con pareja?
-6. ¿Vivirá un menor contigo?
+Proceso de entrevista:
+1. Edad
+2. Nacionalidad
+3. Estudias/trabajas + ingresos
+4. Sanitario o no
+5. Solo o pareja
+6. ¿Vivirá un menor?
 7. ¿Fumas?
 8. ¿Tienes mascotas?
-9. ¿Cuánto tiempo necesitas la habitación?
-10. ¿Quieres añadir algo más libremente?
+9. Tiempo de estancia
+10. Comentarios libres
 
-⚠️ Reglas de conversación:
-- Haz **solo una pregunta a la vez**.
-- No repitas preguntas ya respondidas.
-- Cuando el usuario responde, pasa a la siguiente.
-- Cuando llegues al final, da el resultado (APTO o NO APTO).
-
-⚠️ Reglas de filtro:
+⚠️ Reglas de aptitud:
 - Nacionalidades NO aptas: árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos, ucranianos.
-- Si responde que vivirá un menor → NO APTO.
-- Si fuma → NO APTO.
-- Si tiene mascotas → NO APTO.
+- Si vivirá un menor → NO APTO
+- Si fuma → NO APTO
+- Si tiene mascotas → NO APTO
 
-Si el candidato es NO APTO → mensaje final:
+Resultados:
+- Si NO APTO → Mensaje final: 
 "Lo sentimos, actualmente no tenemos una habitación que cumpla con tus necesidades. Nos pondremos en contacto contigo si surge alguna disponible."
-
-Si es APTO → mensaje final:
+- Si APTO → Mensaje final:
 "Perfecto 🙌, parece que cumples los requisitos. Por favor, facilítanos tu número de teléfono y correo electrónico para contactar contigo."
 
-Al final, responde con un JSON con los datos recogidos y si es apto o no, para guardar en Google Sheets.
+⚠️ MUY IMPORTANTE:
+Al final de la entrevista, SIEMPRE devuelve un bloque JSON válido con esta estructura:
+
+{
+  "apto": true/false,
+  "edad": "...",
+  "nacionalidad": "...",
+  "ocupacionIngresos": "...",
+  "sanitario": "...",
+  "soloPareja": "...",
+  "menores": "...",
+  "fuma": "...",
+  "mascotas": "...",
+  "tiempo": "...",
+  "comentarios": "...",
+  "telefono": "...",
+  "email": "..."
+}
+
+El texto normal para el candidato va ANTES del JSON.
+No inventes datos si el usuario no los da, deja los campos vacíos.
 `;
 
+// --- ENDPOINT DE CHAT ---
+app.post("/chat", async (req, res) => {
+  const { mensaje } = req.body;
+  if (!mensaje) return res.json({ respuesta: "⚠️ No he recibido ningún mensaje" });
+
+  try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: promptBase },
-        ...historial,
-        { role: "user", content: mensaje },
+        { role: "user", content: mensaje }
       ],
     });
 
     const respuesta = completion.choices[0].message.content;
 
-    // Intentar parsear JSON de la respuesta
-    try {
-      const jsonStart = respuesta.indexOf("{");
-      const jsonEnd = respuesta.lastIndexOf("}");
-      if (jsonStart !== -1 && jsonEnd !== -1) {
-        const datosJSON = JSON.parse(respuesta.substring(jsonStart, jsonEnd + 1));
-        if (datosJSON && datosJSON.apto === true) {
-          await guardarEnSheets(datosJSON);
+    // Buscar bloque JSON en la respuesta
+    const match = respuesta.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        const data = JSON.parse(match[0]);
+
+        // Guardar solo si es APTO
+        if (data.apto === true) {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: "Candidatos APTOS!A:Z",
+            valueInputOption: "USER_ENTERED",
+            resource: {
+              values: [[
+                new Date().toLocaleString("es-ES"),
+                data.edad || "",
+                data.nacionalidad || "",
+                data.ocupacionIngresos || "",
+                data.sanitario || "",
+                data.soloPareja || "",
+                data.menores || "",
+                data.fuma || "",
+                data.mascotas || "",
+                data.tiempo || "",
+                data.comentarios || "",
+                data.telefono || "",
+                data.email || ""
+              ]]
+            }
+          });
+          console.log("✅ Candidato apto guardado en Sheets");
+        } else {
+          console.log("ℹ️ Candidato no apto, no se guarda.");
         }
+      } catch (err) {
+        console.error("❌ Error parseando JSON:", err.message);
       }
-    } catch (err) {
-      console.error("⚠️ No se pudo parsear JSON de la respuesta:", err.message);
     }
 
     res.json({ respuesta });
-  } catch (err) {
-    console.error("❌ Error en /chat:", err.message);
-    res.status(500).json({ respuesta: "⚠️ Error interno del servidor" });
+  } catch (error) {
+    console.error("Error en OpenAI:", error);
+    res.status(500).json({ respuesta: "⚠️ Error al conectar con Marina" });
   }
 });
 
-// === INICIAR SERVIDOR ===
+// --- SERVIDOR ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
