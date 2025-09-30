@@ -50,4 +50,97 @@ Preguntas:
 10. ¿Quieres añadir algo?
 
 Reglas:
-- S
+- Si es de países árabes, africanos, oriente medio, musulmanes, asiáticos, Rusia, Bielorrusia o Ucrania → NO APTO.
+- Si vivirá un menor → NO APTO.
+- Si fuma o tiene mascotas → NO APTO.
+
+Si es NO APTO → al final: 
+"Actualmente no tenemos una habitación que cumpla tus necesidades, nos pondremos en contacto cuando haya alguna disponible."
+
+Si es APTO → al final:
+"¡Perfecto! Por favor, indícanos un número de teléfono y un correo electrónico para contactar contigo."
+
+Historial hasta ahora:
+${historial.map(m => `${m.rol}: ${m.texto}`).join("\n")}
+`;
+}
+
+// --- Manejo de sesiones ---
+const sesiones = {};
+
+// --- Endpoint Chat ---
+app.post("/chat", async (req, res) => {
+  const { mensaje, sessionId } = req.body;
+  if (!mensaje || !sessionId) {
+    return res.status(400).json({ error: "Faltan parámetros" });
+  }
+
+  if (!sesiones[sessionId]) {
+    sesiones[sessionId] = [];
+  }
+
+  sesiones[sessionId].push({ rol: "usuario", texto: mensaje });
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: buildPrompt(sesiones[sessionId]) }],
+    });
+
+    const respuesta = completion.choices[0].message.content.trim();
+
+    sesiones[sessionId].push({ rol: "marina", texto: respuesta });
+
+    // Detectar Apto / No Apto y guardar en Sheets
+    if (respuesta.includes("¡Perfecto!")) {
+      try {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: "Candidatos APTOS!A:L",
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [[
+              new Date().toLocaleString(),
+              JSON.stringify(sesiones[sessionId].map(m => m.texto))
+            ]]
+          }
+        });
+        console.log("📋 Candidato Apto guardado en Google Sheets");
+      } catch (err) {
+        console.error("❌ Error al guardar en Google Sheets:", err.message);
+      }
+    }
+
+    res.json({ respuesta });
+  } catch (error) {
+    console.error("Error en OpenAI:", error.message);
+    res.status(500).json({ error: "Error al generar respuesta" });
+  }
+});
+
+// --- Endpoint de test Google Sheets ---
+app.get("/test-sheets", async (req, res) => {
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "Candidatos APTOS!A:L",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[new Date().toLocaleString(), "TEST", "Fila de prueba"]]
+      }
+    });
+    res.send("✅ Fila añadida correctamente en Google Sheets");
+  } catch (e) {
+    console.error("❌ Error test Sheets:", e.message);
+    res.status(500).send("Error: " + e.message);
+  }
+});
+
+// --- Endpoint raíz ---
+app.get("/", (req, res) => {
+  res.send("✅ Marina backend funcionando con Google Sheets");
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+});
