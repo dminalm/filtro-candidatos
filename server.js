@@ -23,6 +23,9 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: "v4", auth });
 
+// --- SESIONES DE USUARIO ---
+const sessions = {}; // cada usuario tendrá su historial de conversación
+
 // --- PROMPT BASE ---
 const promptBase = `
 Eres Marina 👩, una asistente que entrevista candidatos para alquilar habitaciones.
@@ -77,19 +80,29 @@ No inventes datos si el usuario no los da, deja los campos vacíos.
 
 // --- ENDPOINT DE CHAT ---
 app.post("/chat", async (req, res) => {
-  const { mensaje } = req.body;
-  if (!mensaje) return res.json({ respuesta: "⚠️ No he recibido ningún mensaje" });
+  const { mensaje, sessionId } = req.body;
+  if (!mensaje || !sessionId) {
+    return res.json({ respuesta: "⚠️ No he recibido mensaje o falta sessionId" });
+  }
+
+  // Si no existe la sesión, se crea con el prompt base
+  if (!sessions[sessionId]) {
+    sessions[sessionId] = [{ role: "system", content: promptBase }];
+  }
+
+  // Guardar mensaje del usuario
+  sessions[sessionId].push({ role: "user", content: mensaje });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: promptBase },
-        { role: "user", content: mensaje }
-      ],
+      messages: sessions[sessionId],
     });
 
     const respuesta = completion.choices[0].message.content;
+
+    // Guardar respuesta de Marina en la sesión
+    sessions[sessionId].push({ role: "assistant", content: respuesta });
 
     // Buscar bloque JSON en la respuesta
     const match = respuesta.match(/\{[\s\S]*\}/);
@@ -97,7 +110,6 @@ app.post("/chat", async (req, res) => {
       try {
         const data = JSON.parse(match[0]);
 
-        // Guardar solo si es APTO
         if (data.apto === true) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
