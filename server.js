@@ -3,18 +3,16 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const { google } = require("googleapis");
-const { Configuration, OpenAIApi } = require("openai");
+const OpenAI = require("openai");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
 // === CONFIGURACIÓN OPENAI ===
-const openai = new OpenAIApi(
-  new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // === CONFIGURACIÓN GOOGLE SHEETS ===
 async function guardarEnSheets(datos) {
@@ -89,7 +87,7 @@ app.post("/chat", async (req, res) => {
 
   try {
     const promptBase = `
-Eres Marina 🤗, una asistente que entrevista candidatos para alquilar habitaciones.
+Eres Marina 👩, una asistente que entrevista candidatos para alquilar habitaciones.
 Debes sonar simpática, cercana pero profesional. 
 
 Preguntas que debes hacer paso a paso:
@@ -119,7 +117,7 @@ Si es APTO → mensaje final:
 Al final, entrega los datos recogidos en JSON para guardarlos en Google Sheets.
 `;
 
-    const completion = await openai.createChatCompletion({
+    const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: promptBase },
@@ -128,9 +126,9 @@ Al final, entrega los datos recogidos en JSON para guardarlos en Google Sheets.
       ],
     });
 
-    const respuesta = completion.data.choices[0].message.content;
+    const respuesta = completion.choices[0].message.content;
 
-    // Si la respuesta contiene un JSON con datos del candidato, guardamos en Google Sheets
+    // Intentar parsear JSON de la respuesta
     try {
       const jsonStart = respuesta.indexOf("{");
       const jsonEnd = respuesta.lastIndexOf("}");
