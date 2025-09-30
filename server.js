@@ -1,116 +1,116 @@
 // server.js
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
 const { google } = require("googleapis");
 const OpenAI = require("openai");
 
 const app = express();
-app.use(cors());
+const port = process.env.PORT || 10000;
+
 app.use(bodyParser.json());
+app.use(express.static("public"));
 
 // --- CONFIG OPENAI ---
-const openai = new OpenAI({
+const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 // --- CONFIG GOOGLE SHEETS ---
 const SHEET_ID = "1v-1ItJPfLQeZY0d-ayYSv43fkPxWDkyJ1MplenNstc4";
-
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 const sheets = google.sheets({ version: "v4", auth });
 
-// --- SESIONES DE USUARIO ---
-const sessions = {}; // cada usuario tendrá su historial de conversación
+// --- SESIONES ---
+let sessions = {};
 
-// --- PROMPT BASE ---
-const promptBase = `
-Eres Marina 👩, una asistente que entrevista candidatos para alquilar habitaciones.
-Habla de forma cercana pero profesional. 
+// --- PROMPT INICIAL ---
+function getPrompt(history) {
+  return `
+Eres Marina, una asistente simpática y cercana (emoji 👩).  
+Tu tarea es entrevistar candidatos para una habitación siguiendo estas preguntas en orden:
 
-Proceso de entrevista:
-1. Edad
-2. Nacionalidad
-3. Estudias/trabajas + ingresos
-4. Sanitario o no
-5. Solo o pareja
-6. ¿Vivirá un menor?
-7. ¿Fumas?
-8. ¿Tienes mascotas?
-9. Tiempo de estancia
-10. Comentarios libres
+1. ¿Cuántos años tienes?  
+2. ¿Cuál es tu nacionalidad?  
+3. ¿Estudias o trabajas y cuáles son tus ingresos?  
+4. ¿Trabajas en el ámbito sanitario?  
+5. ¿Alquilarás solo/a o con pareja?  
+6. ¿Vivirá un menor contigo en la habitación?  
+7. ¿Fumas?  
+8. ¿Tienes mascotas?  
+9. ¿Cuánto tiempo necesitas la habitación?  
+10. ¿Quieres añadir algo libremente?
 
-⚠️ Reglas de aptitud:
-- Nacionalidades NO aptas: árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos, ucranianos.
-- Si vivirá un menor → NO APTO
-- Si fuma → NO APTO
-- Si tiene mascotas → NO APTO
+⚠️ Reglas para decidir si es APTO o NO APTO:
+- Nacionalidades de países árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos o ucranianos → NO APTO.  
+- Si vive un menor → NO APTO.  
+- Si fuma → NO APTO.  
+- Si tiene mascotas → NO APTO.  
+- Todo lo demás → APTO.
 
-Resultados:
-- Si NO APTO → Mensaje final: 
-"Lo sentimos, actualmente no tenemos una habitación que cumpla con tus necesidades. Nos pondremos en contacto contigo si surge alguna disponible."
-- Si APTO → Mensaje final:
-"Perfecto 🙌, parece que cumples los requisitos. Por favor, facilítanos tu número de teléfono y correo electrónico para contactar contigo."
+👉 Al final de la entrevista:
+- Si es **NO APTO**: responde con un mensaje amable:  
+  "Actualmente no tenemos una habitación que cumpla tus necesidades, te contactaremos si se libera alguna."  
+- Si es **APTO**: pide teléfono y correo electrónico.  
 
-⚠️ MUY IMPORTANTE:
-Al final de la entrevista, SIEMPRE devuelve un bloque JSON válido con esta estructura:
+📌 IMPORTANTE:  
+Cuando tengas toda la información y hayas decidido, responde SOLO UNA VEZ con un JSON válido en este formato:
 
 {
-  "apto": true/false,
-  "edad": "...",
-  "nacionalidad": "...",
-  "ocupacionIngresos": "...",
-  "sanitario": "...",
-  "soloPareja": "...",
-  "menores": "...",
-  "fuma": "...",
-  "mascotas": "...",
-  "tiempo": "...",
-  "comentarios": "...",
-  "telefono": "...",
-  "email": "..."
+  "apto": true,
+  "edad": "30",
+  "nacionalidad": "Española",
+  "ocupacionIngresos": "Trabajo 1200€",
+  "sanitario": "No",
+  "soloPareja": "Solo",
+  "menores": "No",
+  "fuma": "No",
+  "mascotas": "No",
+  "tiempo": "6 meses",
+  "comentarios": "Ninguno",
+  "telefono": "600123123",
+  "email": "ejemplo@email.com"
 }
 
-El texto normal para el candidato va ANTES del JSON.
-No inventes datos si el usuario no los da, deja los campos vacíos.
-`;
+o si no es apto:
 
-// --- ENDPOINT DE CHAT ---
+{
+  "apto": false
+}
+
+Responde de manera natural durante la conversación, pero SOLO al final devuelve ese JSON.  
+---
+Historial:
+${history.join("\n")}
+`;
+}
+
+// --- ENDPOINT CHAT ---
 app.post("/chat", async (req, res) => {
   const { mensaje, sessionId } = req.body;
-  if (!mensaje || !sessionId) {
-    return res.json({ respuesta: "⚠️ No he recibido mensaje o falta sessionId" });
-  }
 
-  // Si no existe la sesión, se crea con el prompt base
-  if (!sessions[sessionId]) {
-    sessions[sessionId] = [{ role: "system", content: promptBase }];
-  }
+  if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
 
-  // Guardar mensaje del usuario
-  sessions[sessionId].push({ role: "user", content: mensaje });
+  sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: sessions[sessionId],
+      messages: [{ role: "system", content: getPrompt(sessions[sessionId].history) }],
     });
 
     const respuesta = completion.choices[0].message.content;
+    sessions[sessionId].history.push(`Marina: ${respuesta}`);
 
-    // Guardar respuesta de Marina en la sesión
-    sessions[sessionId].push({ role: "assistant", content: respuesta });
-
-    // Buscar bloque JSON en la respuesta
-    const match = respuesta.match(/\{[\s\S]*\}/);
-    if (match) {
+    // --- Procesar JSON al final ---
+    const matches = respuesta.match(/\{[\s\S]*?\}/g);
+    if (matches && matches.length > 0) {
       try {
-        const data = JSON.parse(match[0]);
+        const data = JSON.parse(matches[matches.length - 1]);
 
-        if (data.apto === true) {
+        if (data.apto === true && !sessions[sessionId].saved) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
             range: "Candidatos APTOS!A:Z",
@@ -133,9 +133,10 @@ app.post("/chat", async (req, res) => {
               ]]
             }
           });
+          sessions[sessionId].saved = true; // marcar como guardado
           console.log("✅ Candidato apto guardado en Sheets");
         } else {
-          console.log("ℹ️ Candidato no apto, no se guarda.");
+          console.log("ℹ️ Candidato no apto o ya guardado.");
         }
       } catch (err) {
         console.error("❌ Error parseando JSON:", err.message);
@@ -144,13 +145,12 @@ app.post("/chat", async (req, res) => {
 
     res.json({ respuesta });
   } catch (error) {
-    console.error("Error en OpenAI:", error);
-    res.status(500).json({ respuesta: "⚠️ Error al conectar con Marina" });
+    console.error("❌ Error con OpenAI:", error.message);
+    res.status(500).json({ respuesta: "⚠️ Error al conectar con Marina." });
   }
 });
 
-// --- SERVIDOR ---
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+// --- START SERVER ---
+app.listen(port, () => {
+  console.log(`🚀 Servidor escuchando en puerto ${port}`);
 });
