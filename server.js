@@ -43,20 +43,19 @@ Tu tarea es entrevistar candidatos para una habitación siguiendo estas pregunta
 9. ¿Cuánto tiempo necesitas la habitación?  
 10. ¿Quieres añadir algo libremente?
 
-⚠️ Reglas para decidir si es APTO o NO APTO:
-- Nacionalidades de países árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos o ucranianos → NO APTO.  
+⚠️ Reglas:
+- Nacionalidad en países árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos o ucranianos → NO APTO.  
 - Si vive un menor → NO APTO.  
 - Si fuma → NO APTO.  
 - Si tiene mascotas → NO APTO.  
 - Todo lo demás → APTO.
 
-👉 Al final de la entrevista:
-- Si es **NO APTO**: responde con un mensaje amable:  
-  "Actualmente no tenemos una habitación que cumpla tus necesidades, te contactaremos si se libera alguna."  
-- Si es **APTO**: pide teléfono y correo electrónico.  
+👉 Al final:
+- Si es NO APTO: responde amablemente que no tenemos una habitación que cumpla sus necesidades.  
+- Si es APTO: pide teléfono y correo electrónico.  
 
 📌 IMPORTANTE:  
-Cuando tengas toda la información y hayas decidido, responde SOLO UNA VEZ con un JSON válido en este formato:
+Cuando decidas, responde con un JSON **solo una vez** en este formato:
 
 {
   "apto": true,
@@ -80,7 +79,6 @@ o si no es apto:
   "apto": false
 }
 
-Responde de manera natural durante la conversación, pero SOLO al final devuelve ese JSON.  
 ---
 Historial:
 ${history.join("\n")}
@@ -104,7 +102,7 @@ app.post("/chat", async (req, res) => {
     const respuesta = completion.choices[0].message.content;
     sessions[sessionId].history.push(`Marina: ${respuesta}`);
 
-    // --- Procesar JSON al final ---
+    // --- Procesar JSON ---
     const matches = respuesta.match(/\{[\s\S]*?\}/g);
     if (matches && matches.length > 0) {
       try {
@@ -133,7 +131,7 @@ app.post("/chat", async (req, res) => {
               ]]
             }
           });
-          sessions[sessionId].saved = true; // marcar como guardado
+          sessions[sessionId].saved = true;
           console.log("✅ Candidato apto guardado en Sheets");
         } else {
           console.log("ℹ️ Candidato no apto o ya guardado.");
