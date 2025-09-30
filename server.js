@@ -29,14 +29,6 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: "v4", auth });
 
-// --- Función: obtener la primera pestaña del documento ---
-async function getFirstSheetName() {
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId: SHEET_ID,
-  });
-  return metadata.data.sheets[0].properties.title;
-}
-
 // --- Prompt de Marina ---
 function buildPrompt(historial) {
   return `
@@ -102,7 +94,11 @@ app.post("/chat", async (req, res) => {
     // Detectar Apto / No Apto y guardar en Sheets
     if (respuesta.includes("¡Perfecto!")) {
       try {
-        const sheetName = await getFirstSheetName();
+        const metadata = await sheets.spreadsheets.get({
+          spreadsheetId: SHEET_ID,
+        });
+        const sheetName = metadata.data.sheets[0].properties.title;
+
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID,
           range: sheetName,
@@ -127,19 +123,26 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// --- Endpoint de test Google Sheets ---
+// --- Endpoint de test Google Sheets (diagnóstico) ---
 app.get("/test-sheets", async (req, res) => {
   try {
-    const sheetName = await getFirstSheetName();
-    await sheets.spreadsheets.values.append({
+    const metadata = await sheets.spreadsheets.get({
       spreadsheetId: SHEET_ID,
-      range: sheetName,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[new Date().toLocaleString(), "TEST", "Fila de prueba"]]
-      }
     });
-    res.send("✅ Fila añadida correctamente en Google Sheets");
+
+    const sheetName = metadata.data.sheets[0].properties.title;
+    console.log("✅ Nombre de pestaña detectado:", sheetName);
+
+    const data = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: sheetName + "!A1:Z10",
+    });
+
+    res.json({
+      message: "✅ Conexión correcta a Google Sheets",
+      sheetName,
+      firstRows: data.data.values || []
+    });
   } catch (e) {
     console.error("❌ Error test Sheets:", e.message);
     res.status(500).send("Error: " + e.message);
