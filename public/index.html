@@ -12,7 +12,7 @@
     <div class="header-text">
       <h1>Hola, bienvenido a T&D LIVARNA</h1>
       <p>
-        Marina hablará con vosotros y os hará algunas preguntas para encontrar el hogar que mejor se adapte a tus necesidades.  
+        Marina hablará con vosotros y os hará algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades.  
         <br><br>
         <b>Por favor, pedimos la máxima sinceridad.</b>
       </p>
@@ -46,13 +46,28 @@
         });
         const data = await response.json();
 
-        chat.innerHTML += `<div class="msg bot">🤖 ${data.respuesta}</div>`;
+        chat.innerHTML += `<div class="msg bot">👩 ${data.respuesta}</div>`;
       } catch (error) {
         chat.innerHTML += `<div class="msg bot error">⚠️ Error al conectar con Marina</div>`;
       }
 
       input.value = "";
       chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Detectar Enter además del botón
+    document.getElementById("input").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        enviar();
+      }
+    });
+
+    // Mensaje de bienvenida automático al cargar
+    window.onload = function() {
+      const chat = document.getElementById('chat-box');
+      chat.innerHTML += `<div class="msg bot">👩 Hola, soy Marina y le haré algunas preguntas para encontrar la habitación que mejor se adapte a sus necesidades. 
+      No le pediré información privada y protegeremos sus datos conforme a la Ley Orgánica 3/2018 de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD). 
+      Cuando esté listo/a, puede escribirme para comenzar 🙂</div>`;
     }
   </script>
 </body>
