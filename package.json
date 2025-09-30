@@ -1,14 +1,15 @@
 {
   "name": "filtro-candidatos",
   "version": "1.0.0",
+  "description": "Chat con Marina para filtrar candidatos de habitaciones",
   "main": "server.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "googleapis": "^131.0.0"
+    "googleapis": "^131.0.0",
+    "openai": "^4.0.0"
   }
 }
