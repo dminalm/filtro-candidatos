@@ -17,10 +17,6 @@
       color: white;
       padding: 20px;
     }
-    .header img {
-      max-width: 100%;
-      border-radius: 10px;
-    }
     .chat-container {
       max-width: 600px;
       margin: 20px auto;
@@ -42,6 +38,7 @@
       padding: 10px;
       border-radius: 10px;
       max-width: 80%;
+      white-space: pre-wrap;
     }
     .msg.user {
       background: #dcf8c6;
@@ -96,12 +93,16 @@
     const chatBox = document.getElementById("chat-box");
     const input = document.getElementById("input");
 
+    // Guardar historial de conversación
+    let historial = [];
+
     // Mostrar mensaje inicial de Marina
     window.onload = () => {
       agregarMensaje("bot", "👩 Hola, soy Marina y te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada y protegeremos tus datos conforme a la Ley de Protección de Datos (LOPD).");
+      historial.push({ role: "assistant", content: "👩 Hola, soy Marina..." });
     };
 
-    // Función para añadir mensajes
+    // Función para añadir mensajes al chat
     function agregarMensaje(remitente, texto) {
       const div = document.createElement("div");
       div.className = "msg " + remitente;
@@ -116,17 +117,20 @@
       if (!mensaje) return;
 
       agregarMensaje("user", "👤 " + mensaje);
+      historial.push({ role: "user", content: mensaje });
       input.value = "";
 
       try {
         const response = await fetch("https://filtro-candidatos.onrender.com/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensaje })
+          body: JSON.stringify({ mensaje, historial })
         });
 
         const data = await response.json();
+
         agregarMensaje("bot", "👩 " + data.respuesta);
+        historial.push({ role: "assistant", content: data.respuesta });
       } catch (err) {
         agregarMensaje("bot", "⚠️ Error al conectar con Marina.");
       }
