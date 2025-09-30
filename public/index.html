@@ -25,37 +25,30 @@
     <div id="chat-box" class="chat-box"></div>
     <div class="chat-input">
       <input type="text" id="input" placeholder="Escribe tu mensaje...">
-      <button onclick="enviar()">➤</button>
+      <button onclick="enviar()">Enviar</button>
     </div>
   </section>
 
   <script>
-    const sessionId = Date.now().toString(); // ID único por sesión
+    // Generar un sessionId único para cada usuario
+    const sessionId = Date.now().toString() + Math.random().toString(36).substring(2);
 
-    // Enviar con Enter
-    document.getElementById("input").addEventListener("keypress", function(e) {
-      if (e.key === "Enter") enviar();
+    // Referencia al input
+    const input = document.getElementById("input");
+
+    // Permitir enviar con Enter
+    input.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        enviar();
+      }
     });
 
-    // Mensaje de bienvenida automático
-    window.onload = () => {
-      const chat = document.getElementById('chat-box');
-      chat.innerHTML += `<div class="msg bot">👩 Hola, soy Marina y te haré algunas preguntas para encontrar la habitación que se adapte a tus necesidades. No pediré información privada y protegeremos tus datos conforme a la Ley de Protección de Datos. <br><br> ¿Cuántos años tienes?</div>`;
-    };
-
     async function enviar() {
-      const input = document.getElementById('input');
       const mensaje = input.value.trim();
       if (!mensaje) return;
 
-      const chat = document.getElementById('chat-box');
+      const chat = document.getElementById("chat-box");
       chat.innerHTML += `<div class="msg user">👤 ${mensaje}</div>`;
-      input.value = "";
-
-      // Mostrar animación "Marina está escribiendo..."
-      const typingId = "typing-" + Date.now();
-      chat.innerHTML += `<div class="typing" id="${typingId}"><span></span><span></span><span></span> Marina está escribiendo...</div>`;
-      chat.scrollTop = chat.scrollHeight;
 
       try {
         const response = await fetch("https://filtro-candidatos.onrender.com/chat", {
@@ -65,21 +58,21 @@
         });
 
         const data = await response.json();
-
-        // Quitar animación typing
-        const typingElement = document.getElementById(typingId);
-        if (typingElement) typingElement.remove();
-
-        // Añadir respuesta
         chat.innerHTML += `<div class="msg bot">👩 ${data.respuesta}</div>`;
-        chat.scrollTop = chat.scrollHeight;
       } catch (error) {
-        const typingElement = document.getElementById(typingId);
-        if (typingElement) typingElement.remove();
-
         chat.innerHTML += `<div class="msg bot error">⚠️ Error al conectar con Marina</div>`;
       }
+
+      input.value = "";
+      chat.scrollTop = chat.scrollHeight;
     }
+
+    // Mensaje inicial automático de bienvenida
+    window.onload = () => {
+      const chat = document.getElementById("chat-box");
+      chat.innerHTML += `<div class="msg bot">👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada y protegeremos tus datos conforme a la Ley de Protección de Datos (LOPDGDD y RGPD).</div>`;
+      chat.scrollTop = chat.scrollHeight;
+    };
   </script>
 </body>
 </html>
