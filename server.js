@@ -1,8 +1,7 @@
-// server.js
-import express from "express";
-import cors from "cors";
-import { google } from "googleapis";
-import { Configuration, OpenAIApi } from "openai";
+const express = require("express");
+const cors = require("cors");
+const { google } = require("googleapis");
+const { Configuration, OpenAIApi } = require("openai");
 
 const app = express();
 app.use(cors());
