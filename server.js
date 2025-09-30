@@ -52,7 +52,7 @@ app.post("/chat", (req, res) => {
     candidato.paso = 0;
     respuesta =
       "Hola, soy Marina y le haré algunas preguntas para encontrar la habitación que mejor se adapte a sus necesidades. " +
-      "No le pediré información privada y protegeremos sus datos conforme a la Ley Orgánica 3/2018 de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD).\n\n" +
+      "No le pediré información privada y protegeremos.\n\n" +
       flujoPreguntas[0];
     return res.json({ respuesta });
   }
