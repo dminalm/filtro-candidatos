@@ -33,14 +33,9 @@
     // Generar un sessionId único para cada usuario
     const sessionId = Date.now().toString() + Math.random().toString(36).substring(2);
 
-    // Referencia al input
     const input = document.getElementById("input");
-
-    // Permitir enviar con Enter
     input.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
-        enviar();
-      }
+      if (e.key === "Enter") enviar();
     });
 
     async function enviar() {
@@ -67,11 +62,10 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
-    // Mensaje inicial automático de bienvenida
+    // Mensaje inicial automático
     window.onload = () => {
       const chat = document.getElementById("chat-box");
       chat.innerHTML += `<div class="msg bot">👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada y protegeremos tus datos conforme a la Ley de Protección de Datos (LOPDGDD y RGPD).</div>`;
-      chat.scrollTop = chat.scrollHeight;
     };
   </script>
 </body>
