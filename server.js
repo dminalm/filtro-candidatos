@@ -96,7 +96,7 @@ app.post("/chat", async (req, res) => {
       try {
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID,
-          range: "Candidatos APTOS!A:L",
+          range: "Candidatos APTOS", // ✅ cambio aquí
           valueInputOption: "USER_ENTERED",
           requestBody: {
             values: [[
@@ -123,7 +123,7 @@ app.get("/test-sheets", async (req, res) => {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "Candidatos APTOS!A:L",
+      range: "Candidatos APTOS", // ✅ cambio aquí
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[new Date().toLocaleString(), "TEST", "Fila de prueba"]]
