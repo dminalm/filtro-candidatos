@@ -1,86 +1,124 @@
 const express = require("express");
 const cors = require("cors");
-const OpenAI = require("openai");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configuración de OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Flujo de preguntas en orden
+// Flujo de preguntas
 const flujoPreguntas = [
-  "¿Cuánto tiempo planeas quedarte?",
-  "¿Cuál es tu edad?",
-  "¿De qué país vienes?",
-  "¿Trabajas o estudias?",
-  "¿Tienes algún hábito importante (fumar, mascotas, ruido...)?",
-  "¿Cuál es el motivo principal de tu búsqueda?"
+  "¿Cuántos años tienes?",
+  "¿Cuál es tu nacionalidad?",
+  "¿Estudias o trabajas? Si es así, ¿cuáles son tus ingresos aproximados?",
+  "¿Trabajas o estudias en el ámbito sanitario? ¿Eres sanitario?",
+  "¿Alquilarás la habitación solo/a o con pareja?",
+  "¿Vivirá un menor contigo en la habitación?",
+  "¿Fumas?",
+  "¿Tienes mascotas?",
+  "¿Cuánto tiempo necesitas la habitación?",
+  "¿Quieres añadir algo más? Puedes hacerlo libremente."
 ];
 
-// Memoria temporal de candidatos en RAM
-let candidatos = {}; // { sessionId: { paso: 0, respuestas: {} } }
+// Memoria temporal en RAM
+let candidatos = {}; // { sessionId: { paso, respuestas, esApto, completado } }
 
-// Ruta raíz de prueba
+// Ruta raíz
 app.get("/", (req, res) => {
-  res.send("✅ Marina backend funcionando con flujo guiado");
+  res.send("✅ Marina backend funcionando con reglas Apto / No Apto");
 });
 
 // Ruta del chat
-app.post("/chat", async (req, res) => {
+app.post("/chat", (req, res) => {
   const { mensaje, sessionId } = req.body;
-  if (!mensaje) {
-    return res.status(400).json({ error: "Mensaje vacío" });
+  if (!sessionId) {
+    return res.status(400).json({ error: "Falta sessionId" });
   }
 
-  const id = sessionId || "default";
-
-  // Si no existe la sesión, inicializarla
-  if (!candidatos[id]) {
-    candidatos[id] = {
-      paso: 0,
-      respuestas: {}
+  // Inicializar sesión si no existe
+  if (!candidatos[sessionId]) {
+    candidatos[sessionId] = {
+      paso: -1, // -1 significa que aún no se ha hecho la presentación
+      respuestas: {},
+      esApto: true,
+      completado: false,
     };
   }
 
-  const candidato = candidatos[id];
+  const candidato = candidatos[sessionId];
   let respuesta = "";
 
-  // Si todavía quedan preguntas por hacer
-  if (candidato.paso < flujoPreguntas.length) {
-    const preguntaActual = flujoPreguntas[candidato.paso];
+  // Presentación inicial
+  if (candidato.paso === -1) {
+    candidato.paso = 0;
+    respuesta =
+      "Hola, soy Marina y le haré algunas preguntas para encontrar la habitación que mejor se adapte a sus necesidades. " +
+      "No le pediré información privada y protegeremos sus datos conforme a la Ley Orgánica 3/2018 de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD).\n\n" +
+      flujoPreguntas[0];
+    return res.json({ respuesta });
+  }
 
-    // Guardar respuesta del usuario a la pregunta anterior (si no es la primera)
-    if (candidato.paso > 0) {
-      const clave = flujoPreguntas[candidato.paso - 1];
-      candidato.respuestas[clave] = mensaje;
-    }
-
-    // Pasar a la siguiente pregunta
-    respuesta = preguntaActual;
-    candidato.paso++;
-  } else {
-    // Guardar última respuesta
+  // Guardar la respuesta del usuario a la pregunta anterior
+  if (candidato.paso > 0 && candidato.paso <= flujoPreguntas.length) {
     const clave = flujoPreguntas[candidato.paso - 1];
     candidato.respuestas[clave] = mensaje;
 
-    // Cuando termina el flujo
-    respuesta = `Gracias por responder. ✅
+    // Evaluar reglas de Apto / No Apto
+    if (candidato.paso === 2) {
+      // Nacionalidad
+      const nacionalidad = mensaje.toLowerCase();
+      const noAptos = [
+        "árabe", "arabe", "africano", "africa", "medio oriente", "musulmán", "musulmana",
+        "asiático", "asiatica", "asiático", "ruso", "bielorruso", "ucraniano"
+      ];
+      if (noAptos.some(n => nacionalidad.includes(n))) {
+        candidato.esApto = false;
+      }
+    }
 
-Si quieren, pueden dejar su contacto (email o WhatsApp) para que les enviemos fotos y vídeos de la habitación y hablar personalmente para concretar la reserva. 
-¿Desean dejar su contacto para avanzar con la reserva?`;
+    if (candidato.paso === 6) {
+      // Menores
+      if (mensaje.toLowerCase().includes("sí") || mensaje.toLowerCase().includes("si")) {
+        candidato.esApto = false;
+      }
+    }
 
-    // Opcional: aquí podrías guardar en BD (Postgres, Google Sheets, etc.)
-    console.log("📋 Nuevo candidato:", candidato.respuestas);
+    if (candidato.paso === 7) {
+      // Fumar
+      if (mensaje.toLowerCase().includes("sí") || mensaje.toLowerCase().includes("si")) {
+        candidato.esApto = false;
+      }
+    }
 
-    // Reiniciar sesión (si quieres entrevistas múltiples)
-    candidatos[id] = {
-      paso: 0,
-      respuestas: {}
-    };
+    if (candidato.paso === 8) {
+      // Mascotas
+      if (mensaje.toLowerCase().includes("sí") || mensaje.toLowerCase().includes("si")) {
+        candidato.esApto = false;
+      }
+    }
+  }
+
+  // Si aún quedan preguntas
+  if (candidato.paso < flujoPreguntas.length) {
+    respuesta = flujoPreguntas[candidato.paso];
+    candidato.paso++;
+  } else {
+    // Entrevista completada
+    candidato.completado = true;
+
+    if (candidato.esApto) {
+      respuesta =
+        "Gracias por tus respuestas. ✅\n\n" +
+        "Para continuar, necesitamos un número de teléfono y un correo electrónico para ponernos en contacto contigo y enseñarte fotos y vídeos de la habitación. " +
+        "¿Podrías facilitárnoslos, por favor?";
+    } else {
+      respuesta =
+        "Gracias por tus respuestas. 🙏\n\n" +
+        "Actualmente no tenemos una habitación que cumpla con tus necesidades. " +
+        "Nos pondremos en contacto contigo cuando haya alguna disponible.";
+    }
+
+    // Reiniciar entrevista (opcional, para que pueda empezar otra vez)
+    // candidatos[sessionId] = { paso: -1, respuestas: {}, esApto: true, completado: false };
   }
 
   res.json({ respuesta });
