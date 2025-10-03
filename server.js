@@ -1,21 +1,37 @@
 // server.js
 const express = require("express");
 const bodyParser = require("body-parser");
+const cors = require("cors");
 const { google } = require("googleapis");
 const OpenAI = require("openai");
 
 const app = express();
 const port = process.env.PORT || 10000;
 
+/* -------- Middlewares -------- */
+app.use(cors());               // necesario si el front está en otro dominio
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
-// --- CONFIG OPENAI ---
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/* -------- OpenAI -------- */
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// --- CONFIG GOOGLE SHEETS ---
+async function completar(messages) {
+  try {
+    return await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+    });
+  } catch (e) {
+    console.warn("⚠️ Fallback a gpt-3.5-turbo:", e.message);
+    return await client.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages,
+    });
+  }
+}
+
+/* -------- Google Sheets -------- */
 const SHEET_ID = "1v-1ItJPfLQeZY0d-ayYSv43fkPxWDkyJ1MplenNstc4";
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
@@ -23,99 +39,101 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: "v4", auth });
 
-// --- SESIONES ---
-let sessions = {};
+/* -------- Sesiones -------- */
+const sessions = {}; // { [sessionId]: { history: [], saved: false } }
 
-// --- PROMPT INICIAL ---
+/* -------- Prompt -------- */
 function getPrompt(history) {
   return `
 Eres Marina 👩, asistente de T&D LIVARNA.
-Tu misión es realizar una entrevista profesional y cercana a candidatos interesados en alquilar una habitación.  
+Entrevista profesional y cercana. Una sola pregunta a la vez. No repitas lo ya respondido.
 
-📌 Al iniciar la conversación: 
-- Responde con un saludo amable y espera a que el usuario escriba algo (ej: "hola").  
-- Después de la primera intervención del usuario, comienza educadamente con la primera pregunta: "¿Cuántos años tienes?".  
+Al iniciar: saluda de forma amable y espera a que el usuario diga algo. Tras su primer mensaje, empieza con:
+"¿Cuántos años tienes?"
 
-Reglas de estilo:
-- Haz solo una pregunta a la vez.  
-- Sé cercana, clara y profesional.  
-- No repitas preguntas respondidas. 
+Preguntas en orden:
+1) Edad
+2) Nacionalidad
+3) Estudias/trabajas + ingresos aprox.
+4) ¿Trabajas o estudias en el ámbito sanitario o relacionado?
+5) ¿Alquilarás solo/a o con pareja?
+6) ¿Vivirá un menor contigo?
+7) ¿Fumas?
+8) ¿Tienes mascotas?
+9) ¿Cuánto tiempo necesitas la habitación?
+10) ¿Quieres añadir algo libremente?
 
-Flujo de entrevista (en orden):
-1. ¿Cuántos años tienes?  
-2. ¿Cuál es tu nacionalidad?  
-3. ¿Estudias o trabajas? ¿Cuáles son tus ingresos aproximados?  
-4. ¿Trabajas o estudias en el ámbito sanitario o relacionado?  
-5. ¿Alquilarás solo/a o con pareja?  
-6. ¿Vivirá un menor contigo en la habitación?  
-7. ¿Fumas?  
-8. ¿Tienes mascotas?  
-9. ¿Cuánto tiempo necesitas la habitación?  
-10. ¿Quieres añadir algo más libremente?  
+Contacto al final SI y SOLO SI es APTO:
+- Pide teléfono **o** correo (uno de los dos basta). No exijas ambos.
 
-Reglas de aptitud:
-- Nacionalidad en países árabes, africanos, medio oriente, musulmanes, asiáticos, rusos, bielorrusos, ucranianos → NO APTO.  
-- Si hay menores → NO APTO.  
-- Si fuma → NO APTO.  
-- Si tiene mascotas → NO APTO.  
-- Todo lo demás → APTO.  
+NO hagas resumen final visible al usuario.
 
-Al final:
-- Si el candidato es NO APTO → agradece y despídete con un tono educado, sin hacer resumen.  
-- Si es APTO → pide **teléfono o correo electrónico (uno de los dos es suficiente)**. No obligues a dar ambos.  
-
-⚠️ MUY IMPORTANTE:  
-- No generes el JSON de resultado hasta que tengas todos los datos.  
-- El JSON debe ser único y válido, con este formato:
-
+Cuando tengas la decisión final y todos los datos posibles, devuelve EXACTAMENTE UN bloque JSON válido:
 {
   "apto": true/false,
-  "edad": "...",
-  "nacionalidad": "...",
-  "ocupacionIngresos": "...",
-  "sanitario": "...",
-  "soloPareja": "...",
-  "menores": "...",
-  "fuma": "...",
-  "mascotas": "...",
-  "tiempo": "...",
-  "comentarios": "...",
-  "telefono": "...",   // puede ir vacío si dio solo email
-  "email": "..."       // puede ir vacío si dio solo teléfono
+  "edad": "",
+  "nacionalidad": "",
+  "ocupacionIngresos": "",
+  "sanitario": "",
+  "soloPareja": "",
+  "menores": "",
+  "fuma": "",
+  "mascotas": "",
+  "tiempo": "",
+  "comentarios": "",
+  "telefono": "",  // puede estar vacío si solo dio email
+  "email": ""      // puede estar vacío si solo dio teléfono
 }
 
+Si aún no has terminado la entrevista o faltan datos para decidir, NO devuelvas JSON.
+
 ---
-Historial de conversación:
+Historial:
 ${history.join("\n")}
 `;
 }
-// --- ENDPOINT CHAT ---
+
+/* -------- Health -------- */
+app.get("/health", (req, res) => {
+  res.json({ ok: true, service: "marina-backend", time: new Date().toISOString() });
+});
+
+/* -------- Chat -------- */
 app.post("/chat", async (req, res) => {
   const { mensaje, sessionId } = req.body;
+  if (!mensaje || !sessionId) {
+    return res.status(400).json({ respuesta: "⚠️ Faltan 'mensaje' o 'sessionId'." });
+  }
 
   if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
 
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "system", content: getPrompt(sessions[sessionId].history) }],
-    });
+    const completion = await completar([
+      { role: "system", content: getPrompt(sessions[sessionId].history) },
+    ]);
 
-let respuesta = completion.choices[0].message.content || "";
+    // 1) CONTENIDO CRUDO de la IA (aquí sí puede venir el JSON)
+    const raw = completion.choices[0].message.content || "";
+    // Guarda en historial crudo (para el contexto en turnos siguientes)
+    sessions[sessionId].history.push(`Marina: ${raw}`);
 
-// Eliminar cualquier bloque JSON del mensaje visible al usuario
-respuesta = respuesta.replace(/\{[\s\S]*?\}/g, "").trim();
+    // 2) EXTRAER JSON del contenido crudo (code-fences o llaves sueltas)
+    let jsonText = null;
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced && fenced[1]) {
+      jsonText = fenced[1].trim();
+    } else {
+      const braces = raw.match(/\{[\s\S]*?\}/g);
+      if (braces && braces.length > 0) jsonText = braces[braces.length - 1];
+    }
 
-sessions[sessionId].history.push(`Marina: ${respuesta}`);
-
-    // --- Procesar JSON ---
-    const matches = respuesta.match(/\{[\s\S]*?\}/g);
-    if (matches && matches.length > 0) {
+    if (jsonText) {
       try {
-        const data = JSON.parse(matches[matches.length - 1]);
+        const data = JSON.parse(jsonText);
 
+        // 3) Guardar SOLO si es APTO y no se ha guardado aún
         if (data.apto === true && !sessions[sessionId].saved) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
@@ -140,23 +158,36 @@ sessions[sessionId].history.push(`Marina: ${respuesta}`);
             }
           });
           sessions[sessionId].saved = true;
-          console.log("✅ Candidato apto guardado en Sheets");
-        } else {
-          console.log("ℹ️ Candidato no apto o ya guardado.");
+          console.log(`✅ Guardado APT@ en Sheets (sessionId=${sessionId})`);
         }
-      } catch (err) {
-        console.error("❌ Error parseando JSON:", err.message);
+      } catch (e) {
+        console.error("❌ Error parseando JSON:", e.message);
       }
     }
 
-    res.json({ respuesta });
+    // 4) FILTRAR lo que verá el usuario (ocultar cualquier JSON/```...```)
+    let visible = raw
+      .replace(/```[\s\S]*?```/g, "") // quita fences
+      .replace(/\{[\s\S]*?\}/g, "")   // quita JSON suelto
+      .trim();
+
+    // Si la IA solo mandó JSON y nos quedamos sin texto visible, damos un cierre amable
+    if (!visible) {
+      if (sessions[sessionId].saved) {
+        visible = "¡Perfecto! Hemos recibido tus datos de contacto. Te escribiremos en breve. 🙌";
+      } else {
+        visible = "Gracias por la información. Tomo nota. 😊";
+      }
+    }
+
+    res.json({ respuesta: visible });
   } catch (error) {
-    console.error("❌ Error con OpenAI:", error.message);
+    console.error("❌ Error en /chat:", error.message);
     res.status(500).json({ respuesta: "⚠️ Error al conectar con Marina." });
   }
 });
 
-// --- START SERVER ---
+/* -------- Start -------- */
 app.listen(port, () => {
   console.log(`🚀 Servidor escuchando en puerto ${port}`);
 });
