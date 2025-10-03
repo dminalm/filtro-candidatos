@@ -74,9 +74,11 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
 - Si tiene mascotas → NO APTO.  
 - Todo lo demás → APTO.  
 
-📌 Al final:
-- Si es NO APTO → agradécele el tiempo y despídete de forma amable, sin JSON.  
-- Si es APTO → pide un teléfono **o** un correo (solo uno es suficiente).  
+📌 Al final de la entrevista:
+- Pide de forma amable un teléfono **o** un correo electrónico (solo uno es suficiente).  
+- Despídete con un mensaje positivo y educado.  
+- Nunca digas explícitamente que es NO APTO.  
+- Solo en el JSON final indica "apto": true o false.  
 
 📌 JSON final:
 - Solo devuelve un JSON cuando tengas todos los datos y hayas decidido.  
@@ -95,7 +97,7 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
   "mascotas": "",
   "tiempo": "",
   "comentarios": "",
-  "telefono": "", 
+  "telefono": "",
   "email": ""
 }
 
@@ -118,6 +120,7 @@ app.post("/chat", async (req, res) => {
   }
 
   if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
+
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
@@ -125,9 +128,11 @@ app.post("/chat", async (req, res) => {
       { role: "system", content: getPrompt(sessions[sessionId].history) },
     ]);
 
+    // 1) CONTENIDO CRUDO
     const raw = completion.choices[0].message.content || "";
     sessions[sessionId].history.push(`Marina: ${raw}`);
 
+    // 2) EXTRAER JSON
     let jsonText = null;
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced && fenced[1]) {
@@ -141,6 +146,7 @@ app.post("/chat", async (req, res) => {
       try {
         const data = JSON.parse(jsonText);
 
+        // Guardar SOLO si es APTO
         if (data.apto === true && !sessions[sessionId].saved) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
@@ -165,8 +171,8 @@ app.post("/chat", async (req, res) => {
             }
           });
           sessions[sessionId].saved = true;
-          console.log(`✅ Guardado APT@ en Sheets (sessionId=${sessionId})`);
-        } else if (data.apto === false) {
+          console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
+        } else {
           console.log("ℹ️ Candidato NO APTO → no se guarda en Sheets.");
         }
       } catch (e) {
@@ -174,17 +180,14 @@ app.post("/chat", async (req, res) => {
       }
     }
 
+    // 3) FILTRAR JSON de lo que ve el usuario
     let visible = raw
       .replace(/```[\s\S]*?```/g, "")
       .replace(/\{[\s\S]*?\}/g, "")
       .trim();
 
     if (!visible) {
-      if (sessions[sessionId].saved) {
-        visible = "¡Perfecto! Hemos recibido tus datos de contacto. Te escribiremos en breve. 🙌";
-      } else {
-        visible = "Gracias por la información. Tomo nota. 😊";
-      }
+      visible = "Gracias por la información. Hemos terminado la entrevista. 😊";
     }
 
     res.json({ respuesta: visible });
