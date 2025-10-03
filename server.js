@@ -9,7 +9,7 @@ const app = express();
 const port = process.env.PORT || 10000;
 
 /* -------- Middlewares -------- */
-app.use(cors());               // necesario si el front está en otro dominio
+app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
@@ -95,8 +95,8 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
   "mascotas": "",
   "tiempo": "",
   "comentarios": "",
-  "telefono": "",  // puede estar vacío si dio solo email
-  "email": ""      // puede estar vacío si dio solo teléfono
+  "telefono": "", 
+  "email": ""
 }
 
 ---
@@ -104,7 +104,6 @@ Historial:
 ${history.join("\n")}
 `;
 }
-
 
 /* -------- Health -------- */
 app.get("/health", (req, res) => {
@@ -119,7 +118,6 @@ app.post("/chat", async (req, res) => {
   }
 
   if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
-
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
@@ -127,12 +125,9 @@ app.post("/chat", async (req, res) => {
       { role: "system", content: getPrompt(sessions[sessionId].history) },
     ]);
 
-    // 1) CONTENIDO CRUDO de la IA (aquí sí puede venir el JSON)
     const raw = completion.choices[0].message.content || "";
-    // Guarda en historial crudo (para el contexto en turnos siguientes)
     sessions[sessionId].history.push(`Marina: ${raw}`);
 
-    // 2) EXTRAER JSON del contenido crudo (code-fences o llaves sueltas)
     let jsonText = null;
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced && fenced[1]) {
@@ -146,10 +141,7 @@ app.post("/chat", async (req, res) => {
       try {
         const data = JSON.parse(jsonText);
 
-        // 3) Guardar SOLO si es APTO y no se ha guardado aún
         if (data.apto === true && !sessions[sessionId].saved) {
-   // guardar en Sheets
-}
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
             range: "Candidatos APTOS!A:Z",
@@ -174,19 +166,19 @@ app.post("/chat", async (req, res) => {
           });
           sessions[sessionId].saved = true;
           console.log(`✅ Guardado APT@ en Sheets (sessionId=${sessionId})`);
+        } else if (data.apto === false) {
+          console.log("ℹ️ Candidato NO APTO → no se guarda en Sheets.");
         }
       } catch (e) {
         console.error("❌ Error parseando JSON:", e.message);
       }
     }
 
-    // 4) FILTRAR lo que verá el usuario (ocultar cualquier JSON/```...```)
     let visible = raw
-      .replace(/```[\s\S]*?```/g, "") // quita fences
-      .replace(/\{[\s\S]*?\}/g, "")   // quita JSON suelto
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/\{[\s\S]*?\}/g, "")
       .trim();
 
-    // Si la IA solo mandó JSON y nos quedamos sin texto visible, damos un cierre amable
     if (!visible) {
       if (sessions[sessionId].saved) {
         visible = "¡Perfecto! Hemos recibido tus datos de contacto. Te escribiremos en breve. 🙌";
