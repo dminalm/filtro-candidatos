@@ -112,19 +112,6 @@ ${history.join("\n")}
 `;
 }
 
-{
-  "apto": true/false,
-  "edad": "",
-  "nacionalidad": "",
-  "ocupacionIngresos": "",
-  "sanitario": "",
-  "soloPareja": "",
-  "menores": "",
-  "fuma": "",
-  "mascotas": "",
-  "tiem
-
-
 /* -------- Health -------- */
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "marina-backend", time: new Date().toISOString() });
