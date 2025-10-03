@@ -9,7 +9,7 @@ body {
 /* Encabezado */
 .main-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center; /* centramos el logo */
   align-items: center;
   background: #4a90e2;
   color: white;
@@ -20,18 +20,8 @@ body {
 }
 
 .main-header .logo {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: bold;
-}
-
-.main-header nav a {
-  margin-left: 20px;
-  color: white;
-  text-decoration: none;
-  font-size: 14px;
-}
-.main-header nav a:hover {
-  text-decoration: underline;
 }
 
 /* Hero */
