@@ -12,15 +12,38 @@
       margin: 0;
       padding: 0;
     }
+
+    /* Header */
+    .header {
+      text-align: center;
+      background: #007bff;
+      color: white;
+      padding: 20px;
+    }
+    .header img {
+      width: 100%;
+      max-height: 250px;
+      object-fit: cover;
+      border-radius: 10px;
+    }
+    .header h1 {
+      margin: 15px 0 5px;
+    }
+    .header p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Chat container */
     .chat-container {
       max-width: 600px;
-      margin: 40px auto;
+      margin: 20px auto;
       background: #fff;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       display: flex;
       flex-direction: column;
-      height: 80vh;
+      height: 70vh;
       overflow: hidden;
     }
     .chat-box {
@@ -62,15 +85,23 @@
       padding: 0 20px;
       cursor: pointer;
     }
+
+    /* Indicador de escritura */
     .typing {
       font-style: italic;
       color: #666;
       margin: 5px 0;
       align-self: flex-start;
+      display: flex;
+      align-items: center;
+    }
+    .dots {
+      display: inline-flex;
+      margin-left: 5px;
     }
     .dots span {
       animation: blink 1.5s infinite;
-      margin: 0 1px;
+      margin: 0 2px;
     }
     .dots span:nth-child(2) {
       animation-delay: 0.2s;
@@ -85,6 +116,14 @@
   </style>
 </head>
 <body>
+  <!-- Encabezado -->
+  <header class="header">
+    <img src="https://source.unsplash.com/800x250/?house,home" alt="Casas">
+    <h1>Bienvenido a T&D LIVARNA</h1>
+    <p>Marina hablará con vosotros y os hará algunas preguntas para encontrar el hogar que mejor se adapte a vuestras necesidades.</p>
+  </header>
+
+  <!-- Chat -->
   <div class="chat-container">
     <div id="chat-box" class="chat-box">
       <div class="msg bot">👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada.</div>
@@ -113,11 +152,11 @@
       input.value = "";
       chat.scrollTop = chat.scrollHeight;
 
-      // Mostrar indicador de "escribiendo"
+      // Mostrar indicador "escribiendo..."
       const typingId = "typing-" + Date.now();
       chat.innerHTML += `
         <div id="${typingId}" class="msg bot typing">
-          👩 <span class="dots"><span>.</span><span>.</span><span>.</span></span>
+          👩 está escribiendo <span class="dots"><span>.</span><span>.</span><span>.</span></span>
         </div>`;
       chat.scrollTop = chat.scrollHeight;
 
