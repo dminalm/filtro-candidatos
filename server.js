@@ -100,6 +100,28 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
   "menores": "",
   "fuma": "",
   "mascotas": "",
+  "tiempo": "",
+  "comentarios": "",
+  "telefono": "",  // SOLO si el usuario lo dio
+  "email": ""      // SOLO si el usuario lo dio
+}
+
+---
+Historial:
+${history.join("\n")}
+`;
+}
+
+{
+  "apto": true/false,
+  "edad": "",
+  "nacionalidad": "",
+  "ocupacionIngresos": "",
+  "sanitario": "",
+  "soloPareja": "",
+  "menores": "",
+  "fuma": "",
+  "mascotas": "",
   "tiem
 
 
