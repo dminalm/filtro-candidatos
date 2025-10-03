@@ -1,72 +1,59 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>T&D LIVARNA - Chat con Marina</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat con Marina</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f7f7f7;
+      background: #f5f5f5;
       margin: 0;
       padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
-
-    /* Header */
-    .header {
-      text-align: center;
-      background: #007bff;
-      color: white;
-      padding: 20px;
-    }
-    .header img {
-      width: 100%;
-      max-height: 250px;
-      object-fit: cover;
-      border-radius: 10px;
-    }
-    .header h1 {
-      margin: 15px 0 5px;
-    }
-    .header p {
-      margin: 0;
-      font-size: 14px;
-    }
-
-    /* Chat container */
     .chat-container {
-      max-width: 600px;
-      margin: 20px auto;
-      background: #fff;
+      width: 400px;
+      background: white;
       border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       display: flex;
       flex-direction: column;
-      height: 70vh;
       overflow: hidden;
+    }
+    .chat-header {
+      background: #1976d2;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
     }
     .chat-box {
       flex: 1;
-      padding: 20px;
+      padding: 15px;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     .msg {
-      margin: 8px 0;
-      padding: 10px 15px;
-      border-radius: 20px;
-      max-width: 75%;
-      line-height: 1.4;
+      padding: 10px;
+      border-radius: 8px;
+      max-width: 80%;
     }
-    .msg.user {
-      background: #007bff;
-      color: #fff;
+    .user {
       align-self: flex-end;
+      background: #1976d2;
+      color: white;
     }
-    .msg.bot {
-      background: #eee;
-      color: #333;
+    .marina {
       align-self: flex-start;
+      background: #e3f2fd;
+      color: #000;
     }
     .chat-input {
       display: flex;
@@ -74,16 +61,19 @@
     }
     .chat-input input {
       flex: 1;
-      padding: 12px;
       border: none;
-      outline: none;
+      padding: 10px;
+      font-size: 16px;
     }
     .chat-input button {
-      background: #007bff;
-      color: white;
       border: none;
-      padding: 0 20px;
+      background: #1976d2;
+      color: white;
+      padding: 10px 15px;
       cursor: pointer;
+    }
+    .chat-input input:focus {
+      outline: none;
     }
 
     /* Indicador de escritura */
@@ -95,20 +85,22 @@
       display: flex;
       align-items: center;
     }
+
     .dots {
       display: inline-flex;
       margin-left: 5px;
     }
+
     .dots span {
-      animation: blink 1.5s infinite;
+      display: inline-block;
       margin: 0 2px;
+      font-size: 20px;
+      animation: blink 1.5s infinite;
     }
-    .dots span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    .dots span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+
     @keyframes blink {
       0%, 80%, 100% { opacity: 0; }
       40% { opacity: 1; }
@@ -116,69 +108,74 @@
   </style>
 </head>
 <body>
-  <!-- Encabezado -->
-  <header class="header">
-    <img src="https://source.unsplash.com/800x250/?house,home" alt="Casas">
-    <h1>Bienvenido a T&D LIVARNA</h1>
-    <p>Marina hablará con vosotros y os hará algunas preguntas para encontrar el hogar que mejor se adapte a vuestras necesidades.</p>
-  </header>
-
-  <!-- Chat -->
   <div class="chat-container">
-    <div id="chat-box" class="chat-box">
-      <div class="msg bot">👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada.</div>
-    </div>
+    <div class="chat-header">👩 Chat con Marina</div>
+    <div id="chat-box" class="chat-box"></div>
     <div class="chat-input">
-      <input type="text" id="input" placeholder="Escribe tu mensaje...">
-      <button onclick="enviar()">Enviar</button>
+      <input id="user-input" type="text" placeholder="Escribe tu mensaje..."/>
+      <button onclick="sendMessage()">Enviar</button>
     </div>
   </div>
 
   <script>
+    const chatBox = document.getElementById("chat-box");
+    const userInput = document.getElementById("user-input");
     const sessionId = Date.now().toString();
 
-    // Enviar mensaje con Enter
-    document.getElementById("input").addEventListener("keypress", function(e) {
-      if (e.key === "Enter") enviar();
-    });
+    function addMessage(sender, text) {
+      const msg = document.createElement("div");
+      msg.classList.add("msg", sender);
+      msg.textContent = text;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-    async function enviar() {
-      const input = document.getElementById('input');
-      const mensaje = input.value.trim();
-      if (!mensaje) return;
+    function addTyping() {
+      const typing = document.createElement("div");
+      typing.classList.add("typing");
+      typing.id = "typing";
+      typing.innerHTML = `Marina está escribiendo<span class="dots"><span>.</span><span>.</span><span>.</span></span>`;
+      chatBox.appendChild(typing);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-      const chat = document.getElementById('chat-box');
-      chat.innerHTML += `<div class="msg user">👤 ${mensaje}</div>`;
-      input.value = "";
-      chat.scrollTop = chat.scrollHeight;
+    function removeTyping() {
+      const typing = document.getElementById("typing");
+      if (typing) typing.remove();
+    }
 
-      // Mostrar indicador "escribiendo..."
-      const typingId = "typing-" + Date.now();
-      chat.innerHTML += `
-        <div id="${typingId}" class="msg bot typing">
-          👩 está escribiendo <span class="dots"><span>.</span><span>.</span><span>.</span></span>
-        </div>`;
-      chat.scrollTop = chat.scrollHeight;
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      addMessage("user", text);
+      userInput.value = "";
+
+      addTyping();
 
       try {
-        const response = await fetch("/chat", {
+        const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensaje, sessionId })
+          body: JSON.stringify({ mensaje: text, sessionId })
         });
-        const data = await response.json();
-
-        // Quitar el "escribiendo..."
-        document.getElementById(typingId)?.remove();
-
-        // Mostrar respuesta real
-        chat.innerHTML += `<div class="msg bot">👩 ${data.respuesta}</div>`;
-        chat.scrollTop = chat.scrollHeight;
-      } catch (error) {
-        document.getElementById(typingId)?.remove();
-        chat.innerHTML += `<div class="msg bot error">⚠️ Error al conectar con Marina</div>`;
+        const data = await res.json();
+        removeTyping();
+        addMessage("marina", data.respuesta);
+      } catch (e) {
+        removeTyping();
+        addMessage("marina", "⚠️ Error al conectar con Marina.");
       }
     }
+
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    // Mensaje inicial de bienvenida
+    window.onload = () => {
+      addMessage("marina", "👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada.");
+    };
   </script>
 </body>
 </html>
