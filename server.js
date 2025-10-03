@@ -103,8 +103,12 @@ app.post("/chat", async (req, res) => {
       messages: [{ role: "system", content: getPrompt(sessions[sessionId].history) }],
     });
 
-    const respuesta = completion.choices[0].message.content;
-    sessions[sessionId].history.push(`Marina: ${respuesta}`);
+let respuesta = completion.choices[0].message.content || "";
+
+// Eliminar cualquier bloque JSON del mensaje visible al usuario
+respuesta = respuesta.replace(/\{[\s\S]*?\}/g, "").trim();
+
+sessions[sessionId].history.push(`Marina: ${respuesta}`);
 
     // --- Procesar JSON ---
     const matches = respuesta.match(/\{[\s\S]*?\}/g);
