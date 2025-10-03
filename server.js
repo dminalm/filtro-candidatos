@@ -45,7 +45,7 @@ Flujo de entrevista (en orden):
 1. ¿Cuántos años tienes?  
 2. ¿Cuál es tu nacionalidad?  
 3. ¿Estudias o trabajas? ¿Cuáles son tus ingresos aproximados?  
-4. ¿Trabajas en el ámbito sanitario?  
+4. ¿Trabajas o estudias en el ámbito sanitario o relacionado?  
 5. ¿Alquilarás solo/a o con pareja?  
 6. ¿Vivirá un menor contigo en la habitación?  
 7. ¿Fumas?  
