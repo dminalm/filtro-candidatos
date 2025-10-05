@@ -43,7 +43,7 @@ const sheets = google.sheets({ version: "v4", auth });
 const sessions = {}; // { [sessionId]: { history: [], saved: false } }
 
 /* -------- Prompt -------- */
-function getPrompt(history) {
+function getPromptBase() {
   return `
 Eres Marina 👩, asistente de T&D LIVARNA.  
 Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona real: cercana, simpática, educada y profesional.  
@@ -76,7 +76,7 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
 - Todo lo demás → APTO.  
 
 📌 MUY IMPORTANTE:
-- Si el candidato no te dice los ingresos, insiste en que ingresos tiene 
+- Si el candidato no te dice los ingresos, insiste en que ingresos tiene. 
 - Independientemente de si es APTO o NO APTO, **siempre realiza TODA la entrevista completa (todas las preguntas del 1 al 10)**.  
 - Al final SIEMPRE pide un teléfono o un correo electrónico (solo uno es suficiente).  
 - Despídete con un mensaje amable y positivo.  
@@ -104,14 +104,10 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
   "mascotas": "",
   "tiempo": "",
   "comentarios": "",
-  "telefono": "",  // SOLO si el usuario lo dio
-  "email": ""      // SOLO si el usuario lo dio
+  "telefono": "",
+  "email": ""
 }
-
----
-Historial:
-${history.join("\n")}
-`;
+  `;
 }
 
 /* -------- Health -------- */
@@ -131,15 +127,23 @@ app.post("/chat", async (req, res) => {
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
-    const completion = await completar([
-      { role: "system", content: getPrompt(sessions[sessionId].history) },
-    ]);
+    const messages = [
+      { role: "system", content: getPromptBase() },
+      ...sessions[sessionId].history.map((msg) => {
+        if (msg.startsWith("Usuario:")) {
+          return { role: "user", content: msg.replace("Usuario:", "").trim() };
+        } else {
+          return { role: "assistant", content: msg.replace("Marina:", "").trim() };
+        }
+      }),
+    ];
 
-    // 1) CONTENIDO CRUDO
+    const completion = await completar(messages);
+
     const raw = completion.choices[0].message.content || "";
     sessions[sessionId].history.push(`Marina: ${raw}`);
 
-    // 2) EXTRAER JSON
+    // EXTRAER JSON
     let jsonText = null;
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced && fenced[1]) {
@@ -187,7 +191,7 @@ app.post("/chat", async (req, res) => {
       }
     }
 
-    // 3) FILTRAR JSON de lo que ve el usuario
+    // FILTRAR lo que ve el usuario
     let visible = raw
       .replace(/```[\s\S]*?```/g, "")
       .replace(/\{[\s\S]*?\}/g, "")
