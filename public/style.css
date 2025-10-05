@@ -135,3 +135,58 @@ body {
   66% { content: ".."; }
   100% { content: "..."; }
 }
+/* -------- ADAPTACIÓN SMARTPHONE -------- */
+@media (max-width: 768px) {
+  .header {
+    padding: 20px 15px;
+    border-radius: 0 0 20px 20px;
+  }
+
+  .header-text h1 {
+    font-size: 1.4rem;
+  }
+
+  .header-text p {
+    font-size: 0.9rem;
+  }
+
+  .chat-container {
+    margin: 0;
+    border-radius: 0;
+    height: calc(100vh - 160px); /* ocupa toda la pantalla salvo header */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-box {
+    flex: 1;
+    max-height: none;
+    overflow-y: auto;
+    border-radius: 0;
+    padding: 15px;
+  }
+
+  .msg {
+    max-width: 95%;
+    font-size: 1rem;
+    padding: 10px 14px;
+  }
+
+  .chat-input {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding: 8px;
+    border-top: 1px solid #ddd;
+  }
+
+  .chat-input input {
+    padding: 10px;
+    font-size: 1rem;
+  }
+
+  .chat-input button {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+  }
+}
