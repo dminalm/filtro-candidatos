@@ -1,105 +1,81 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>T&D LIVARNA - Chat con Marina</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Encabezado -->
-  <header class="main-header">
-    <div class="logo">🏠 T&D LIVARNA</div>
+  <header class="header">
+    <img src="https://source.unsplash.com/800x400/?house,home" alt="Casas" class="header-img">
+    <div class="header-text">
+      <h1>Bienvenido a T&D LIVARNA</h1>
+      <p>Marina te hará algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades.</p>
+    </div>
   </header>
 
-  <!-- Hero -->
-  <section class="hero">
-    <div class="hero-text">
-      <h1>Encuentra tu hogar ideal con Marina</h1>
-      <p>
-        Nuestra asistente virtual te hará unas preguntas sencillas para 
-        conocerte mejor y proponerte la habitación que encaje contigo.
-      </p>
-    </div>
-  </section>
-
   <!-- Chat -->
-  <section class="chat-section">
-    <div class="chat-container">
-      <div class="chat-header">👩 Chat con Marina</div>
-      <div id="chat-box" class="chat-box"></div>
-      <div class="chat-input">
-        <input id="user-input" type="text" placeholder="Escribe tu mensaje..." />
-        <button onclick="sendMessage()">Enviar</button>
-      </div>
+  <section class="chat-container">
+    <div id="chat-box" class="chat-box"></div>
+    <div class="chat-input">
+      <input type="text" id="input" placeholder="Escribe tu mensaje...">
+      <button onclick="enviar()">Enviar</button>
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer>
-    © 2025 T&D LIVARNA · Todos los derechos reservados
-  </footer>
-
-  <!-- Script -->
   <script>
-    const chatBox = document.getElementById("chat-box");
-    const userInput = document.getElementById("user-input");
+    const chat = document.getElementById("chat-box");
+    const input = document.getElementById("input");
     const sessionId = Date.now().toString();
 
-    function addMessage(sender, text) {
-      const msg = document.createElement("div");
-      msg.classList.add("msg", sender);
-      msg.textContent = text;
-      chatBox.appendChild(msg);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+    // Bienvenida automática
+    window.onload = () => {
+      chat.innerHTML += `<div class="msg bot">👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada.</div>`;
+    };
 
-    function addTyping() {
-      const typing = document.createElement("div");
-      typing.classList.add("typing");
-      typing.id = "typing";
-      typing.innerHTML = `Marina está escribiendo<span class="dots"><span>.</span><span>.</span><span>.</span></span>`;
-      chatBox.appendChild(typing);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function removeTyping() {
-      const typing = document.getElementById("typing");
-      if (typing) typing.remove();
-    }
-
-    async function sendMessage() {
-      const text = userInput.value.trim();
-      if (!text) return;
-
-      addMessage("user", text);
-      userInput.value = "";
-
-      addTyping();
-
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensaje: text, sessionId })
-        });
-        const data = await res.json();
-        removeTyping();
-        addMessage("marina", data.respuesta);
-      } catch (e) {
-        removeTyping();
-        addMessage("marina", "⚠️ Error al conectar con Marina.");
+    // Detectar Enter
+    input.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        enviar();
       }
-    }
-
-    userInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") sendMessage();
     });
 
-    // Mensaje inicial
-    window.onload = () => {
-      addMessage("marina", "👩 Hola, soy Marina. Te haré algunas preguntas para encontrar la habitación que mejor se adapte a tus necesidades. No pediré información privada.");
-    };
+    async function enviar() {
+      const mensaje = input.value.trim();
+      if (!mensaje) return;
+
+      chat.innerHTML += `<div class="msg user">👤 ${mensaje}</div>`;
+      input.value = "";
+
+      // Mostrar indicador de escritura
+      const typingEl = document.createElement("div");
+      typingEl.classList.add("msg", "bot", "typing");
+      typingEl.innerHTML = "👩 Marina está escribiendo<span></span>";
+      chat.appendChild(typingEl);
+      chat.scrollTop = chat.scrollHeight;
+
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensaje, sessionId })
+        });
+
+        const data = await response.json();
+
+        // Eliminar indicador
+        typingEl.remove();
+
+        chat.innerHTML += `<div class="msg bot">👩 ${data.respuesta}</div>`;
+      } catch (error) {
+        typingEl.remove();
+        chat.innerHTML += `<div class="msg bot error">⚠️ Error al conectar con Marina.</div>`;
+      }
+
+      chat.scrollTop = chat.scrollHeight;
+    }
   </script>
 </body>
 </html>
