@@ -4,7 +4,6 @@ body {
   background: #f5f7f4;
   color: #333;
 }
-
 /* -------- ENCABEZADO -------- */
 .header {
   text-align: center;
@@ -30,7 +29,6 @@ body {
   font-weight: 400;
   margin-top: 8px;
 }
-
 /* -------- CHAT -------- */
 .chat-container {
   max-width: 600px;
