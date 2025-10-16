@@ -8,7 +8,6 @@ const OpenAI = require("openai");
 const app = express();
 const port = process.env.PORT || 10000;
 
-/* -------- Middlewares -------- */
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static("public"));
@@ -141,24 +140,35 @@ app.post("/chat", async (req, res) => {
     const completion = await completar(messages);
 
     const raw = completion.choices[0].message.content || "";
+    console.log("📨 Respuesta cruda de Marina:\n", raw);
     sessions[sessionId].history.push(`Marina: ${raw}`);
 
-    // EXTRAER JSON
+    // EXTRAER JSON con robustez
     let jsonText = null;
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced && fenced[1]) {
       jsonText = fenced[1].trim();
     } else {
-      const braces = raw.match(/\{[\s\S]*?\}/g);
-      if (braces && braces.length > 0) jsonText = braces[braces.length - 1];
+      const lastOpen = raw.lastIndexOf("{");
+      const lastClose = raw.lastIndexOf("}");
+      if (lastOpen !== -1 && lastClose > lastOpen) {
+        jsonText = raw.slice(lastOpen, lastClose + 1).trim();
+      }
     }
+
+    console.log("🧪 JSON detectado:", jsonText ? "✅ Sí" : "❌ No");
 
     if (jsonText) {
       try {
         const data = JSON.parse(jsonText);
+        console.log("📊 Datos parseados:", data);
 
-        // Guardar SOLO si es APTO
-        if (data.apto === true && !sessions[sessionId].saved) {
+        const isApto =
+          data.apto === true ||
+          data.apto === "true" ||
+          (typeof data.apto === "string" && data.apto.toLowerCase() === "true");
+
+        if (isApto && !sessions[sessionId].saved) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
             range: "Candidatos APTOS!A:Z",
@@ -184,17 +194,17 @@ app.post("/chat", async (req, res) => {
           sessions[sessionId].saved = true;
           console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
         } else {
-          console.log("ℹ️ Candidato NO APTO → no se guarda en Sheets.");
+          console.log("ℹ️ Candidato NO APTO o ya guardado → no se guarda en Sheets.");
         }
       } catch (e) {
         console.error("❌ Error parseando JSON:", e.message);
       }
     }
 
-    // FILTRAR lo que ve el usuario
+    // FILTRAR JSON de lo que ve el usuario
     let visible = raw
       .replace(/```[\s\S]*?```/g, "")
-      .replace(/\{[\s\S]*?\}/g, "")
+      .replace(/\{[\s\S]*?\}\s*$/g, "")
       .trim();
 
     if (!visible) {
