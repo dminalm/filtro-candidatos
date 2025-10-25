@@ -111,7 +111,17 @@ Tu tarea es entrevistar candidatos para habitaciones. Habla como una persona rea
 
 /* -------- Health -------- */
 app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "marina-backend", time: new Date().toISOString() });
+  res.set("Cache-Control", "no-store");
+  res.status(200).json({
+    ok: true,
+    service: "marina-backend",
+    time: new Date().toISOString(),
+  });
+});
+
+app.head("/health", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.status(200).end();
 });
 
 /* -------- Chat -------- */
