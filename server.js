@@ -32,11 +32,60 @@ async function completar(messages) {
 
 /* -------- Google Sheets -------- */
 const SHEET_ID = "1v-1ItJPfLQeZY0d-ayYSv43fkPxWDkyJ1MplenNstc4";
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
-const sheets = google.sheets({ version: "v4", auth });
+
+// Cargamos credenciales de entorno (Render)
+let creds = {};
+try {
+  creds = JSON.parse(process.env.GOOGLE_CREDENTIALS || "{}");
+} catch (e) {
+  console.error("❌ GOOGLE_CREDENTIALS no es un JSON válido:", e.message);
+}
+
+// Devuelve un cliente "fresco" de Sheets (evita problemas tras inactividad)
+async function getSheetsClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+  // Forzamos creación de cliente por si el primero caducó
+  await auth.getClient();
+  return google.sheets({ version: "v4", auth });
+}
+
+// Guardar con reintento: si falla una vez, reintenta con cliente nuevo
+async function appendWithRetry(range, values) {
+  try {
+    const sheets = await getSheetsClient();
+    return await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range,
+      valueInputOption: "USER_ENTERED",
+      resource: { values: [values] },
+    });
+  } catch (e1) {
+    console.error("⚠️ Primer intento falló, reintentando…", e1?.response?.data?.error || e1.message);
+    try {
+      const sheets2 = await getSheetsClient();
+      return await sheets2.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [values] },
+      });
+    } catch (e2) {
+      console.error("❌ Guardado falló tras reintento:", e2?.response?.data?.error || e2.message);
+      throw e2;
+    }
+  }
+}
+
+// (Opcional) para ver el email del service account en logs (útil para compartir la hoja)
+function maskEmail(email) {
+  if (!email) return "(desconocido)";
+  const [u, d] = email.split("@");
+  return (u?.slice(0, 2) || "") + "***@" + (d || "");
+}
+console.log("ℹ️ Google service account:", maskEmail(creds?.client_email));
 
 /* -------- Sesiones -------- */
 const sessions = {}; // { [sessionId]: { history: [], saved: false } }
@@ -124,6 +173,28 @@ app.head("/health", (req, res) => {
   res.status(200).end();
 });
 
+/* -------- Ruta de prueba de guardado --------
+   Úsala para comprobar que Google Sheets graba, aunque no haya entrevistas.
+   1) Añade en Render una ENV: DEBUG_KEY (cualquier valor)
+   2) Visita: /debug/save-test?key=TU_DEBUG_KEY
+--------------------------------------------- */
+const DEBUG_KEY = process.env.DEBUG_KEY || "";
+app.get("/debug/save-test", async (req, res) => {
+  try {
+    if (!DEBUG_KEY || req.query.key !== DEBUG_KEY) {
+      return res.status(403).send("Forbidden (falta clave DEBUG_KEY).");
+    }
+    const now = new Date().toLocaleString("es-ES");
+    await appendWithRetry("Candidatos APTOS!A:Z", [
+      now, "99", "prueba", "prueba ingresos", "no", "solo", "no", "no", "no", "1 mes", "fila test", "600000000", "test@example.com"
+    ]);
+    res.send("✅ Test guardado OK en 'Candidatos APTOS'. Revisa la hoja.");
+  } catch (e) {
+    console.error("❌ Error guardando test en Google Sheets:", e?.response?.data?.error || e.message);
+    res.status(500).send("❌ Error guardando test: " + (e?.response?.data?.error?.message || e.message));
+  }
+});
+
 /* -------- Chat -------- */
 app.post("/chat", async (req, res) => {
   const { mensaje, sessionId } = req.body;
@@ -132,7 +203,6 @@ app.post("/chat", async (req, res) => {
   }
 
   if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
-
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
@@ -148,8 +218,7 @@ app.post("/chat", async (req, res) => {
     ];
 
     const completion = await completar(messages);
-
-    const raw = completion.choices[0].message.content || "";
+    const raw = completion.choices?.[0]?.message?.content || "";
     console.log("📨 Respuesta cruda de Marina:\n", raw);
     sessions[sessionId].history.push(`Marina: ${raw}`);
 
@@ -169,8 +238,14 @@ app.post("/chat", async (req, res) => {
     console.log("🧪 JSON detectado:", jsonText ? "✅ Sí" : "❌ No");
 
     if (jsonText) {
+      let data;
       try {
-        const data = JSON.parse(jsonText);
+        data = JSON.parse(jsonText);
+      } catch (e) {
+        console.error("❌ Error al leer JSON de Marina:", e.message);
+      }
+
+      if (data) {
         console.log("📊 Datos parseados:", data);
 
         const isApto =
@@ -179,35 +254,30 @@ app.post("/chat", async (req, res) => {
           (typeof data.apto === "string" && data.apto.toLowerCase() === "true");
 
         if (isApto && !sessions[sessionId].saved) {
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID,
-            range: "Candidatos APTOS!A:Z",
-            valueInputOption: "USER_ENTERED",
-            resource: {
-              values: [[
-                new Date().toLocaleString("es-ES"),
-                data.edad || "",
-                data.nacionalidad || "",
-                data.ocupacionIngresos || "",
-                data.sanitario || "",
-                data.soloPareja || "",
-                data.menores || "",
-                data.fuma || "",
-                data.mascotas || "",
-                data.tiempo || "",
-                data.comentarios || "",
-                data.telefono || "",
-                data.email || ""
-              ]]
-            }
-          });
-          sessions[sessionId].saved = true;
-          console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
+          try {
+            await appendWithRetry("Candidatos APTOS!A:Z", [
+              new Date().toLocaleString("es-ES"),
+              data.edad || "",
+              data.nacionalidad || "",
+              data.ocupacionIngresos || "",
+              data.sanitario || "",
+              data.soloPareja || "",
+              data.menores || "",
+              data.fuma || "",
+              data.mascotas || "",
+              data.tiempo || "",
+              data.comentarios || "",
+              data.telefono || "",
+              data.email || ""
+            ]);
+            sessions[sessionId].saved = true;
+            console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
+          } catch (e) {
+            console.error("❌ Error guardando en Google Sheets:", e?.response?.data?.error || e.message);
+          }
         } else {
-          console.log("ℹ️ Candidato NO APTO o ya guardado → no se guarda en Sheets.");
+          console.log("ℹ️ No se guarda: candidato NO APTO o ya guardado en esta sesión.");
         }
-      } catch (e) {
-        console.error("❌ Error parseando JSON:", e.message);
       }
     }
 
@@ -223,7 +293,7 @@ app.post("/chat", async (req, res) => {
 
     res.json({ respuesta: visible });
   } catch (error) {
-    console.error("❌ Error en /chat:", error.message);
+    console.error("❌ Error en /chat:", error?.response?.data?.error || error.message);
     res.status(500).json({ respuesta: "⚠️ Error al conectar con Marina." });
   }
 });
