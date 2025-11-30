@@ -173,6 +173,21 @@ app.head("/health", (req, res) => {
   res.status(200).end();
 });
 
+/* -------- Warm Sheets -------- */
+app.get("/warm", async (req, res) => {
+  try {
+    const sheets = await getSheetsClient(); // crea cliente “fresco”
+    await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "Candidatos APTOS!A1:A1", // lectura mínima
+    });
+    res.status(200).send("OK warm");
+  } catch (e) {
+    console.error("❌ Warm Sheets error:", e?.response?.data?.error || e.message);
+    res.status(500).send("Warm error");
+  }
+});
+
 /* -------- Ruta de prueba de guardado --------
    Úsala para comprobar que Google Sheets graba, aunque no haya entrevistas.
    1) Añade en Render una ENV: DEBUG_KEY (cualquier valor)
@@ -301,4 +316,9 @@ app.post("/chat", async (req, res) => {
 /* -------- Start -------- */
 app.listen(port, () => {
   console.log(`🚀 Servidor escuchando en puerto ${port}`);
+  // Autowarm al arrancar (ignora errores)
+  try {
+    // Node 18+ tiene fetch global. Si no, simplemente fallará en silencio.
+    fetch(`http://localhost:${port}/warm`).catch(() => {});
+  } catch (_) {}
 });
