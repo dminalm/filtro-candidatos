@@ -88,7 +88,9 @@ function maskEmail(email) {
 console.log("ℹ️ Google service account:", maskEmail(creds?.client_email));
 
 /* -------- Sesiones -------- */
-const sessions = {}; // { [sessionId]: { history: [], saved: false } }
+// Estructura nueva para evitar duplicados por sesión:
+// { [sessionId]: { history: [], savedApto: false, savedNoApto: false } }
+const sessions = {};
 
 /* -------- Prompt -------- */
 function getPromptBase() {
@@ -217,7 +219,18 @@ app.post("/chat", async (req, res) => {
     return res.status(400).json({ respuesta: "⚠️ Faltan 'mensaje' o 'sessionId'." });
   }
 
-  if (!sessions[sessionId]) sessions[sessionId] = { history: [], saved: false };
+  // Inicializa/actualiza estructura de sesión para evitar duplicados
+  if (!sessions[sessionId]) {
+    sessions[sessionId] = { history: [], savedApto: false, savedNoApto: false };
+  } else {
+    // Compatibilidad si existía 'saved' antiguo
+    if (sessions[sessionId].saved === true && sessions[sessionId].savedApto === undefined) {
+      sessions[sessionId].savedApto = true;
+    }
+    if (sessions[sessionId].savedApto === undefined) sessions[sessionId].savedApto = false;
+    if (sessions[sessionId].savedNoApto === undefined) sessions[sessionId].savedNoApto = false;
+  }
+
   sessions[sessionId].history.push(`Usuario: ${mensaje}`);
 
   try {
@@ -268,30 +281,47 @@ app.post("/chat", async (req, res) => {
           data.apto === "true" ||
           (typeof data.apto === "string" && data.apto.toLowerCase() === "true");
 
-        if (isApto && !sessions[sessionId].saved) {
-          try {
-            await appendWithRetry("Candidatos APTOS!A:Z", [
-              new Date().toLocaleString("es-ES"),
-              data.edad || "",
-              data.nacionalidad || "",
-              data.ocupacionIngresos || "",
-              data.sanitario || "",
-              data.soloPareja || "",
-              data.menores || "",
-              data.fuma || "",
-              data.mascotas || "",
-              data.tiempo || "",
-              data.comentarios || "",
-              data.telefono || "",
-              data.email || ""
-            ]);
-            sessions[sessionId].saved = true;
-            console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
-          } catch (e) {
-            console.error("❌ Error guardando en Google Sheets:", e?.response?.data?.error || e.message);
+        const fila = [
+          new Date().toLocaleString("es-ES"),
+          data.edad || "",
+          data.nacionalidad || "",
+          data.ocupacionIngresos || "",
+          data.sanitario || "",
+          data.soloPareja || "",
+          data.menores || "",
+          data.fuma || "",
+          data.mascotas || "",
+          data.tiempo || "",
+          data.comentarios || "",
+          data.telefono || "",
+          data.email || ""
+        ];
+
+        if (isApto) {
+          if (!sessions[sessionId].savedApto) {
+            try {
+              await appendWithRetry("Candidatos APTOS!A:Z", fila);
+              sessions[sessionId].savedApto = true;
+              console.log(`✅ Guardado APTO en Sheets (sessionId=${sessionId})`);
+            } catch (e) {
+              console.error("❌ Error guardando APTO:", e?.response?.data?.error || e.message);
+            }
+          } else {
+            console.log("ℹ️ Ya guardado APTO previamente en esta sesión.");
           }
         } else {
-          console.log("ℹ️ No se guarda: candidato NO APTO o ya guardado en esta sesión.");
+          if (!sessions[sessionId].savedNoApto) {
+            try {
+              // Nombre exacto de tu pestaña para NO APTOS
+              await appendWithRetry("candidatos NO APTOS!A:Z", fila);
+              sessions[sessionId].savedNoApto = true;
+              console.log(`✅ Guardado NO APTO en Sheets (sessionId=${sessionId})`);
+            } catch (e) {
+              console.error("❌ Error guardando NO APTO:", e?.response?.data?.error || e.message);
+            }
+          } else {
+            console.log("ℹ️ Ya guardado NO APTO previamente en esta sesión.");
+          }
         }
       }
     }
